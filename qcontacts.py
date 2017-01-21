@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-
+# https://github.com/pandolia/qqbot
 from collections import defaultdict
 
 CTYPES = ('buddy', 'group', 'discuss')
