@@ -5,9 +5,6 @@ import logging
 import copy
 import sys
 import time
-fetch_logger = logging.getLogger('Fetcher')
-consumer_logger = logging.getLogger('Consumer')
-publisher_logger = logging.getLogger('Publisher')
 
 BLACK = 10001
 RED = 10002
@@ -32,17 +29,6 @@ def get_logger(logger_name):
     logger.log_http = lambda x: logger.log(HTTP_RESP, x)
 
     return logger
-
-# dynamic patch
-fetch_logger.log_black = lambda x: fetch_logger.log(BLACK, x)
-fetch_logger.log_red = lambda x: fetch_logger.log(RED, x)
-fetch_logger.log_green = lambda x: fetch_logger.log(GREEN, x)
-fetch_logger.log_yellow = lambda x: fetch_logger.log(YELLOW, x)
-fetch_logger.log_blue = lambda x: fetch_logger.log(BLUE, x)
-fetch_logger.log_magenta = lambda x: fetch_logger.log(MAGENTA, x)
-fetch_logger.log_cyan = lambda x: fetch_logger.log(CYAN, x)
-fetch_logger.log_white = lambda x: fetch_logger.log(WHITE, x)
-fetch_logger.log_http = lambda x: fetch_logger.log(HTTP_RESP, x)
 
 root_handler = None
 # Portable color codes from http://en.wikipedia.org/wiki/ANSI_escape_code#Colors.
