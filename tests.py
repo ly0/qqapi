@@ -1,5 +1,6 @@
 import json
 import os
+import pickle
 import random
 
 import sys
@@ -60,19 +61,51 @@ def bknHash(skey):
 
 
 class Account:
-    def __init__(self, username, password):
-        self.username = username
-        self.password = password
+    def __init__(self, qq):
+        self.qq = qq
         self.session = Session(default_headers=DEFAULT_HEADERS)
         self.logger = get_logger('Account')
-        self.msg_id = 6000000
+        self.msg_id = 5310000
         self.client_id = 53999199
 
         self.group_data = {}
         self.contact_data = {}
         self.group_member_data = {}
 
+    async def loop(self):
+
+        self.contacts = QContacts()
+        # await self.get_buddies(contacts)
+        await self.get_groups(self.contacts)
+        # await self.get_discusses(contacts)
+
+        print(self.contacts.List('group'))
+
+
+        #await self.get_admins(318495368)
+        #mute_result = await self.mute_group_member(318495368, 17076601, 600)
+        #await self.mute_group(318495368, enable=True)
+
+        #print(await self.get_group_members(318495368))
+        #print(mute_result)
+
+        while True:
+            '''
+            [{'poll_type': 'group_message', 'value': {'group_code': 4170064607, 'time': 1485007629, 'msg_id': 40231, 'msg_type': 0, 'from_uin': 4170064607, 'to_uin': 3267641449, 'send_uin': 716694329, 'content': [['font', {'size': 10, 'style': [0, 0, 0], 'color': '000000', 'name': '微软雅黑'}], '懂得可能比你都多']}}]
+
+            '''
+
+            msg_type, uin, send_uin, content = await self.poll()
+            if msg_type == 'group':
+                member = self.contacts.Get(msg_type, uin)[0].members[send_uin]
+                name = member['card'] or member['nick']
+                await self.send_message(ctype='group', uin=uin, content="[MSGRECV]" + content, at=name)
+
     async def login(self):
+        await self.qrcode()
+        await self.after_qr()
+
+    async def qrcode(self):
         await self.session.fetch(
             'https://ui.ptlogin2.qq.com/cgi-bin/login?daid=164&target=self&'
             'style=16&mibao_css=m_webqq&appid=501004106&enable_qlogin=0&'
@@ -123,9 +156,11 @@ class Account:
 
             await tornado.gen.sleep(5)
 
+    async def after_qr(self):
+
         self.logger.info('登录 Step3 - 获取ptwebqq')
         try:
-            await self.session.fetch(self.urlPtwebqq)
+            result = await self.session.fetch(self.urlPtwebqq)
         except tornado.httpclient.HTTPError as e:
             if e.code != 404:
                 raise e
@@ -159,7 +194,6 @@ class Account:
         self.hash = qHash(self.uin, self.ptwebqq)
         self.bkn = bknHash(self.session.cookiejar['skey'])
 
-
         # Test
         await self.smart_request(
             url=('http://d1.web2.qq.com/channel/get_online_buddies2?'
@@ -170,33 +204,6 @@ class Account:
             Origin='http://d1.web2.qq.com',
             repeateOnDeny=0
         )
-
-        self.contacts = QContacts()
-        # await self.get_buddies(contacts)
-        await self.get_groups(self.contacts)
-        # await self.get_discusses(contacts)
-
-
-        #await self.get_admins(318495368)
-        #mute_result = await self.mute_group_member(318495368, 17076601, 600)
-        #await self.mute_group(318495368, enable=True)
-
-        #print(await self.get_group_members(318495368))
-        #print(mute_result)
-
-
-
-        while True:
-            '''
-            [{'poll_type': 'group_message', 'value': {'group_code': 4170064607, 'time': 1485007629, 'msg_id': 40231, 'msg_type': 0, 'from_uin': 4170064607, 'to_uin': 3267641449, 'send_uin': 716694329, 'content': [['font', {'size': 10, 'style': [0, 0, 0], 'color': '000000', 'name': '微软雅黑'}], '懂得可能比你都多']}}]
-
-            '''
-
-            msg_type, uin, send_uin, content = await self.poll()
-            if msg_type == 'group':
-                member = self.contacts.Get(msg_type, uin)[0].members[send_uin]
-                name = member['card'] or member['nick']
-                await self.send_message(ctype='group', uin=uin, content="[MSGRECV]" + content, at=name)
 
     async def smart_request(self, url, data=None, headers=None,
                             request_timeout=None, timeoutRetVal=None, repeateOnDeny=2, **kw):
@@ -368,6 +375,8 @@ class Account:
                      'callback=1&id=2')
         )
 
+        print({'vfwebqq': self.vfwebqq, 'hash': self.hash})
+
         mark_dict = dict((d['uin'], d['markname']) for d in result['gmarklist'])
 
         qq_result = await self.smart_request(
@@ -531,7 +540,7 @@ class Account:
                         ['font', {'name': '宋体', 'size': 10,
                                   'style': [0, 0, 0], 'color': '000000'}]
                     ]),
-                    'face': 522,
+                    'face': 597,
                     'clientid': self.client_id,
                     'msg_id': self.msg_id,
                     'psessionid': self.psessionid
@@ -596,6 +605,8 @@ class Account:
                                           Referer='http://qinfo.clt.qq.com/qinfo_v3/member.html',
                                           )
 
+        return result
+
     async def get_admins(self, gid):
         url = 'http://qinfo.clt.qq.com/cgi-bin/qun_info/get_admin_auth?auth=1&gc={gid}&bkn={self.bkn}'.format(gid=gid, self=self)
 
@@ -618,6 +629,66 @@ class Account:
 
         return result['mems']
 
-account = Account('a', 'b')
+    async def exit(self, message=None):
+        groups = self.contacts.List('group')
 
-tornado.ioloop.IOLoop.current().run_sync(account.login)
+        for group in groups:
+            uin = group.uin
+            await self.send_message('group', uin, message or "SIGINT 信号已接受，Shina 酱将会进入睡眠.")
+
+
+def save_account(account):
+    account_file = '.{0}.account'.format(account.qq)
+    with open(account_file, 'wb') as f:
+        data = dict(
+            cookies=account.session.cookiejar,
+            nick=account.nick,
+            qq=account.qq,
+            urlPtwebqq=account.urlPtwebqq,
+            ptwebqq=account.ptwebqq,
+            vfwebqq=account.vfwebqq,
+            uin=account.uin,
+            psessionid=account.psessionid,
+            hash=account.hash,
+            bkn=account.bkn
+        )
+
+        pickle.dump(data, f)
+
+
+def load_account(qq):
+    try:
+        account_file = '.{0}.account'.format(qq)
+
+        account = Account(qq=qq)
+        with open(account_file, 'rb') as f:
+            data = pickle.load(f)
+            account.session.cookiejar = data['cookies']
+            account.nick = data['nick']
+            account.qq = data['qq']
+            account.urlPtwebqq = data['urlPtwebqq']
+            account.vfwebqq = data['vfwebqq']
+            account.uin = data['uin']
+            account.psessionid = data['psessionid']
+            account.hash = data['hash']
+            account.bkn = data['bkn']
+            account.ptwebqq = data['ptwebqq']
+
+        return account
+    except:
+        return None
+
+
+try:
+    qq = 3267641449
+    local_account_object = load_account(qq)
+    account = local_account_object or Account(qq=qq)
+
+    if not local_account_object:
+        tornado.ioloop.IOLoop.current().run_sync(account.login)
+        # login done save object
+        save_account(account)
+    tornado.ioloop.IOLoop.current().run_sync(account.loop)
+except KeyboardInterrupt as e:
+    tornado.ioloop.IOLoop.current().stop()
+    raise e
